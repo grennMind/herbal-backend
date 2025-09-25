@@ -6,8 +6,6 @@ import morgan from 'morgan';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -30,20 +28,18 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const clientDist = path.resolve(__dirname, '../dist');
 
-// Rate limiting
+// ------------------------------
+// Middleware
+// ------------------------------
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   message: 'Too many requests from this IP, please try again later.'
 });
 
-// Middleware
 app.use(helmet());
-// Configure CORS origins
+
 const defaultDevOrigins = ['http://localhost:3000', 'http://localhost:5173'];
 const envOrigins = (process.env.FRONTEND_ORIGINS || '')
   .split(',')
@@ -53,16 +49,12 @@ const allowedOrigins = envOrigins.length > 0
   ? envOrigins
   : (process.env.NODE_ENV === 'production' ? [] : defaultDevOrigins);
 
-app.use(cors({
-  origin: allowedOrigins.length ? allowedOrigins : false,
-  credentials: true
-}));
+app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : false, credentials: true }));
 app.use(compression());
 app.use(morgan('combined'));
 app.use(limiter);
 
-// Disable ETag for API responses and enforce no-cache to avoid 304 with empty body
-// This prevents browsers/proxies from serving 304 Not Modified for JSON APIs
+// Disable ETag & enforce no-cache for API responses
 app.set('etag', false);
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -71,12 +63,23 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Special handling for Stripe webhook (raw body)
+// Special handling for Stripe webhook
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 
-// Regular middleware
+// JSON & URL-encoded parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// ------------------------------
+// Root route
+// ------------------------------
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Herbal Backend API 🌿',
+    docs: '/api/health'
+  });
+});
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -88,7 +91,9 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// ------------------------------
 // API Routes
+// ------------------------------
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
@@ -101,52 +106,28 @@ app.use('/api/knowledge', knowledgeRoutes);
 app.use('/api/proxy', proxyRoutes);
 app.use('/api/session', sessionRoutes);
 
-// Ensure no /api/* path ever falls through to SPA index.html
-// Any unmatched /api/* should return JSON 404 instead of HTML
-app.all('/api/*', (req, res, next) => {
-  // If a previous route wrote headers, skip
-  if (res.headersSent) return next();
-  return res.status(404).json({ success: false, message: 'API endpoint not found' });
+// Catch unmatched /api routes
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ success: false, message: 'API endpoint not found' });
 });
 
-// ------------------------------
-// Static frontend (Render single URL / production)
-// ------------------------------
-// Serve React build if it exists (harmless locally if not built)
-// app.use(express.static(clientDist));
-
-// // SPA fallback: send index.html for non-API routes
-// app.get('*', (req, res, next) => {
-//   if (req.path.startsWith('/api')) return next();
-//   try {
-//     return res.sendFile(path.join(clientDist, 'index.html'));
-//   } catch {
-//     return next();
-//   }
-// });
-
-// 404 handler
+// Catch all other unknown routes
 app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'API endpoint not found'
-  });
+  res.status(404).json({ success: false, message: 'Route not found' });
 });
 
 // Error handling
 app.use(errorHandler);
 
+// ------------------------------
 // Start server
+// ------------------------------
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📱 API Health: http://localhost:${PORT}/api/health`);
   console.log(`🌿 Environment: ${process.env.NODE_ENV}`);
 });
 
-// Optional: handle unhandled rejections / exceptions
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled Promise Rejection:', err);
-});
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-});
+// Handle unhandled rejections / exceptions
+process.on('unhandledRejection', (err) => console.error('Unhandled Rejection:', err));
+process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err));
