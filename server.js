@@ -113,17 +113,17 @@ app.all('/api/*', (req, res, next) => {
 // Static frontend (Render single URL / production)
 // ------------------------------
 // Serve React build if it exists (harmless locally if not built)
-app.use(express.static(clientDist));
+// app.use(express.static(clientDist));
 
-// SPA fallback: send index.html for non-API routes
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api')) return next();
-  try {
-    return res.sendFile(path.join(clientDist, 'index.html'));
-  } catch {
-    return next();
-  }
-});
+// // SPA fallback: send index.html for non-API routes
+// app.get('*', (req, res, next) => {
+//   if (req.path.startsWith('/api')) return next();
+//   try {
+//     return res.sendFile(path.join(clientDist, 'index.html'));
+//   } catch {
+//     return next();
+//   }
+// });
 
 // 404 handler
 app.use('*', (req, res) => {
